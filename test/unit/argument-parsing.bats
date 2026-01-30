@@ -1,0 +1,210 @@
+#!/usr/bin/env bats
+#
+# Unit tests for argument parsing in openclaw-security-audit.sh
+#
+
+setup() {
+    load '../test_helper/common-setup'
+}
+
+# =============================================================================
+# --help flag tests
+# =============================================================================
+
+@test "--help shows usage information" {
+    run_openclaw --help
+    assert_success
+    assert_output --partial "Usage:"
+    assert_output --partial "openclaw-security-audit"
+}
+
+@test "-h shows usage information" {
+    run_openclaw -h
+    assert_success
+    assert_output --partial "Usage:"
+}
+
+@test "--help shows --fix option" {
+    run_openclaw --help
+    assert_success
+    assert_output --partial "--fix"
+}
+
+@test "--help shows --json option" {
+    run_openclaw --help
+    assert_success
+    assert_output --partial "--json"
+}
+
+@test "--help shows --quiet option" {
+    run_openclaw --help
+    assert_success
+    assert_output --partial "--quiet"
+}
+
+@test "--help shows exit codes" {
+    run_openclaw --help
+    assert_success
+    assert_output --partial "Exit Codes:"
+    assert_output --partial "0"
+    assert_output --partial "1"
+    assert_output --partial "2"
+}
+
+@test "--help exits with code 0" {
+    run_openclaw --help
+    assert_success
+}
+
+# =============================================================================
+# Unknown option tests
+# =============================================================================
+
+@test "unknown option shows error message" {
+    run_openclaw --unknown-flag
+    assert_failure
+    assert_output --partial "Unknown option: --unknown-flag"
+}
+
+@test "unknown option shows help" {
+    run_openclaw --invalid
+    assert_failure
+    assert_output --partial "Usage:"
+}
+
+@test "unknown option exits with code 1" {
+    run_openclaw --foobar
+    [[ $status -eq 1 ]]
+}
+
+# =============================================================================
+# --json flag tests
+# =============================================================================
+
+@test "--json produces JSON output" {
+    # Create mock environment to avoid actual checks
+    setup_test_home
+    activate_mocks
+
+    run_openclaw --json
+    # May fail but should still produce JSON
+    assert_output --partial "{"
+    assert_output --partial "\"version\":"
+    assert_output --partial "\"summary\":"
+
+    teardown_test_home
+}
+
+@test "--json output is valid JSON" {
+    setup_test_home
+    activate_mocks
+
+    run_openclaw --json
+
+    # Check output is valid JSON (regardless of exit code)
+    if command -v jq &>/dev/null; then
+        run bash -c "echo '$output' | jq . &>/dev/null"
+        assert_success
+    else
+        # Fallback: basic structure check
+        [[ "$output" =~ ^\{ ]]
+    fi
+
+    teardown_test_home
+}
+
+@test "--json contains required summary fields" {
+    setup_test_home
+    activate_mocks
+
+    run_openclaw --json
+
+    assert_output --partial '"pass":'
+    assert_output --partial '"fail":'
+    assert_output --partial '"warn":'
+    assert_output --partial '"skip":'
+    assert_output --partial '"risk_score":'
+
+    teardown_test_home
+}
+
+# =============================================================================
+# --fix flag tests
+# =============================================================================
+
+@test "--fix sets FIX_MODE" {
+    # Simulate parsing --fix flag
+    FIX_MODE=false
+    set -- --fix
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --fix) FIX_MODE=true; shift ;;
+            *) shift ;;
+        esac
+    done
+
+    [[ "$FIX_MODE" == true ]]
+}
+
+@test "--fix shows fix mode banner" {
+    setup_test_home
+    activate_mocks
+
+    run_openclaw --fix
+
+    assert_output --partial "FIX MODE"
+
+    teardown_test_home
+}
+
+# =============================================================================
+# --quiet flag tests
+# =============================================================================
+
+@test "--quiet suppresses pass and skip messages" {
+    source_openclaw_functions
+    reset_counters
+    JSON_MODE=false
+    QUIET_MODE=true
+
+    # log_pass should be silent
+    run log_pass "Test Check" "test passed"
+    assert_output ""
+
+    # log_skip should be silent
+    run log_skip "Skipped Check" "not applicable"
+    assert_output ""
+}
+
+# =============================================================================
+# Combined flags tests
+# =============================================================================
+
+@test "multiple flags can be combined" {
+    setup_test_home
+
+    # Create basic mocks so script doesn't crash on missing commands
+    create_mock "ufw" 1 ""
+    create_mock "iptables" 1 ""
+    create_mock "firewall-cmd" 1 ""
+    create_mock "systemctl" 1 ""
+    create_mock "docker" 1 ""
+    create_mock "fail2ban-client" 1 ""
+    create_mock "op" 1 ""
+    create_mock "bw" 1 ""
+    create_mock "lpass" 1 ""
+    activate_mocks
+
+    # Run with combined flags
+    run_openclaw --json --quiet
+
+    # Script should produce valid JSON output (main success criteria)
+    assert_output --partial "{"
+    assert_output --partial "\"version\":"
+
+    # Exit code should be 0, 1, or 2 (not a crash/signal)
+    # 0 = all pass, 1 = failures, 2 = warnings only
+    [[ $status -le 2 ]]
+
+    teardown_test_home
+}

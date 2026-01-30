@@ -1,0 +1,112 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install jq || true
+
+      - name: Make scripts executable
+        run: |
+          chmod +x openclaw-security-audit.sh
+          chmod +x test/bats/bin/bats
+          chmod +x test/bats/libexec/bats-core/*
+          find test -name "*.bash" -exec chmod +x {} \;
+          find test -name "*.sh" -exec chmod +x {} \;
+
+      - name: Run unit tests
+        run: make test-unit
+
+      - name: Run integration tests
+        run: make test-integration
+
+      - name: Run output tests
+        run: make test-output
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck on main script
+        run: shellcheck --severity=warning openclaw-security-audit.sh
+
+      - name: Run ShellCheck on test helper
+        run: shellcheck --severity=warning test/test_helper/common-setup.bash || true
+
+  audit-self-test:
+    name: Self Audit Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Run security audit (JSON mode)
+        run: |
+          chmod +x openclaw-security-audit.sh
+          # Script may exit 1 (failures) or 2 (warnings) - that's expected on CI
+          ./openclaw-security-audit.sh --json > audit-results.json || true
+          echo "=== Audit Results ==="
+          cat audit-results.json
+
+      - name: Validate JSON output
+        run: |
+          if ! jq . audit-results.json > /dev/null 2>&1; then
+            echo "ERROR: Invalid JSON output"
+            cat audit-results.json
+            exit 1
+          fi
+          echo "JSON output is valid"
+
+      - name: Check for required fields
+        run: |
+          echo "Checking required fields..."
+          jq -e '.version' audit-results.json > /dev/null && echo "  - version: OK"
+          jq -e '.timestamp' audit-results.json > /dev/null && echo "  - timestamp: OK"
+          jq -e '.summary.pass >= 0' audit-results.json > /dev/null && echo "  - summary.pass: OK"
+          jq -e '.summary.fail >= 0' audit-results.json > /dev/null && echo "  - summary.fail: OK"
+          jq -e '.summary.warn >= 0' audit-results.json > /dev/null && echo "  - summary.warn: OK"
+          jq -e '.summary.skip >= 0' audit-results.json > /dev/null && echo "  - summary.skip: OK"
+          jq -e '.summary.risk_score >= 0' audit-results.json > /dev/null && echo "  - summary.risk_score: OK"
+          echo "All required fields present"
+
+      - name: Display summary
+        run: |
+          echo "=== Summary ==="
+          jq '.summary' audit-results.json
