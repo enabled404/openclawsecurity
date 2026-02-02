@@ -10,7 +10,7 @@
 
 **A security audit tool for folks who run OpenClaw on their own machines.**
 
-I built this because I love using OpenClaw as my personal AI assistant, but let's be honest — giving an AI full access to your shell, browser sessions, and API keys is *terrifying* if you don't lock it down properly. This tool helps you make sure your setup isn't accidentally exposing you to attacks.
+I built this  after finding critical vulnerabilities in my Whitehat test of openclaw, but let's be honest  giving an AI full access to your shell, browser sessions, and API keys is *terrifying* if you don't lock it down properly. This tool helps you make sure your setup isn't accidentally exposing you to attacks.
 
 ## What's This About?
 
