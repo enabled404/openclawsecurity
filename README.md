@@ -16,11 +16,11 @@ I built this because I love using OpenClaw as my personal AI assistant, but let'
 
 If you're running [OpenClaw](https://github.com/openclaw/openclaw) (the self-hosted AI assistant), you've probably already realized it has some serious power:
 
-- It runs with **your user permissions** — meaning it can do anything you can do
-- It holds **live browser sessions** — OAuth tokens, session cookies, the works
-- It can access **password managers** — 1Password CLI, Bitwarden, etc.  
-- It exposes a **control gateway** — if misconfigured, anyone on your network could send it commands
-- It pulls **plugins from the internet** — code that runs in your shell
+- It runs with **your user permissions**  meaning it can do anything you can do
+- It holds **live browser sessions**  OAuth tokens, session cookies, the works
+- It can access **password managers**  1Password CLI, Bitwarden, etc.  
+- It exposes a **control gateway**  if misconfigured, anyone on your network could send it commands
+- It pulls **plugins from the internet**  code that runs in your shell
 
 This is awesome for productivity. It's also a huge attack surface if you don't configure things right.
 
